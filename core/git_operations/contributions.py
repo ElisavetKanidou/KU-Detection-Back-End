@@ -11,7 +11,7 @@ def create_temp_dir():
     os.mkdir(TEMP_FILES_BASE_PATH)
 
 
-def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=False):
+def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=False,):
     repo = get_repo(repo_path)
     if fetch_updates:
         repo.remotes.origin.fetch()
@@ -22,7 +22,11 @@ def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=Fa
     contributions = []
 
     # Iterate over commits in the active branch
+    i=1
     for commit in repo.iter_commits(max_count=commit_limit, skip=skip):
+        print(i)
+        print(commit_limit, skip)
+        i=i+1
         if commit.hexsha in processed_commits:
             continue
 
@@ -36,6 +40,7 @@ def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=Fa
         else:
             # This is a merge commit
             continue
+        print("Continued ... ")
 
         contributions += get_contributions_from_diffs(commit, diffs)
 

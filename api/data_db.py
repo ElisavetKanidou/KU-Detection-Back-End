@@ -10,7 +10,6 @@ DB_NAME = 'test'
 DB_USER = 'root'
 DB_PASSWORD = '30a301d725711'
 
-
 def get_db_connection():
     conn = psycopg2.connect(
         dbname=DB_NAME,
@@ -21,9 +20,19 @@ def get_db_connection():
     )
     return conn
 
-
 def create_tables():
     commands = [
+        '''
+        CREATE TABLE repositories (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) UNIQUE NOT NULL,
+            url VARCHAR(255),
+            description TEXT,
+            comments TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''',
         '''
         CREATE TABLE commits (
             id SERIAL PRIMARY KEY,
@@ -35,8 +44,6 @@ def create_tables():
             timestamp TIMESTAMP,
             sha VARCHAR(255)
         )
-
-
         ''',
         '''
         CREATE TABLE analysis_results (
@@ -66,6 +73,55 @@ def create_tables():
         if conn is not None:
             conn.close()
 
+def save_repo_to_db(name, url=None, description=None, comments=None):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('''
+            INSERT INTO repositories (name, url, description, comments)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (name) DO UPDATE
+            SET url = EXCLUDED.url,
+                description = EXCLUDED.description,
+                comments = EXCLUDED.comments,
+                updated_at = CURRENT_TIMESTAMP
+        ''', (name, url, description, comments))
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        conn.close()
+
+
+def get_all_repos_from_db():
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute('''
+                    SELECT name, url, description, comments, created_at, updated_at
+                    FROM repositories
+                ''')
+
+                rows = cur.fetchall()
+
+                repos = []
+                for row in rows:
+                    repo = {
+                        "name": row[0],
+                        "url": row[1],
+                        "description": row[2],
+                        "comments": row[3],
+                        "created_at": row[4],
+                        "updated_at": row[5]
+                    }
+                    repos.append(repo)
+
+                return repos
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
+
 
 def save_commits_to_db(repo_name, commits):
     try:
@@ -90,9 +146,6 @@ def save_commits_to_db(repo_name, commits):
         print(f"An error occurred: {e}")
     finally:
         conn.close()
-
-
-
 
 def get_commits_from_db(repo_name):
     try:
@@ -126,7 +179,6 @@ def get_commits_from_db(repo_name):
     finally:
         conn.close()
 
-
 def save_analysis_to_db(repo_name, analysis_data):
     try:
         conn = get_db_connection()
@@ -152,5 +204,45 @@ def save_analysis_to_db(repo_name, analysis_data):
         cur.close()
     except Exception as e:
         print(f"An error occurred: {e}")
+    finally:
+        conn.close()
+
+def get_analysis_from_db(repo_name):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute('''
+            SELECT filename, author, timestamp, sha, detected_kus, elapsed_time
+            FROM analysis_results
+            WHERE repo_name = %s
+        ''', (repo_name,))
+
+        rows = cur.fetchall()
+
+        analysis_data = []
+        for row in rows:
+            filename, author, timestamp, sha, detected_kus, elapsed_time = row
+
+            # Ανάγνωση και μετατροπή των δεδομένων από τη βάση
+            detected_kus_deserialized = json.loads(detected_kus)  # Convert JSON string back to Python object
+            timestamp_deserialized = datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
+
+            analysis_data.append({
+                "filename": filename,
+                "author": author,
+                "timestamp": timestamp_deserialized,
+                "sha": sha,
+                "detected_kus": detected_kus_deserialized,
+                "elapsed_time": elapsed_time
+            })
+
+        cur.close()
+        return analysis_data
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
     finally:
         conn.close()
