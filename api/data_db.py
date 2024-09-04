@@ -94,6 +94,35 @@ def save_repo_to_db(name, url=None, description=None, comments=None):
         conn.close()
 
 
+def delete_repo_from_db(repo_name):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Διαγραφή από τον πίνακα analysis_results
+        cur.execute('''
+            DELETE FROM analysis_results WHERE repo_name = %s
+        ''', (repo_name,))
+
+        # Διαγραφή από τον πίνακα commits
+        cur.execute('''
+            DELETE FROM commits WHERE repo_name = %s
+        ''', (repo_name,))
+
+        # Διαγραφή από τον πίνακα repositories
+        cur.execute('''
+            DELETE FROM repositories WHERE name = %s
+        ''', (repo_name,))
+
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        raise e  # Ξαναπετάμε το σφάλμα για να το διαχειριστεί η διαδρομή Flask
+    finally:
+        conn.close()
+
+
 def get_all_repos_from_db():
     try:
         with get_db_connection() as conn:
@@ -178,6 +207,34 @@ def get_commits_from_db(repo_name):
         return []
     finally:
         conn.close()
+
+def getdetected_kus():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute('''
+            SELECT detected_kus
+            FROM analysis_results
+        ''')
+
+        rows = cur.fetchall()
+
+        detected_kus_list = []
+        for row in rows:
+            detected_kus = json.loads(json.dumps(row[0]))  # Μετατροπή από JSON string σε Python object
+            detected_kus_list.append(detected_kus)
+
+        cur.close()
+        return detected_kus_list
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+    finally:
+        conn.close()
+
 
 def save_analysis_to_db(repo_name, analysis_data):
     try:

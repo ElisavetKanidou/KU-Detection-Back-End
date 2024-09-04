@@ -5,7 +5,7 @@ import os
 import datetime
 
 from api.data_db import save_commits_to_db, get_commits_from_db, save_analysis_to_db, save_repo_to_db, \
-    get_all_repos_from_db, get_analysis_from_db
+    get_all_repos_from_db, get_analysis_from_db, delete_repo_from_db, getdetected_kus
 from core.git_operations import clone_repo, repo_exists, extract_contributions
 from core.utils.code_files_loader import read_files_from_dict_list
 from core.ml_operations.loader import load_codebert_model
@@ -54,6 +54,20 @@ def init_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route('/detected_kus', methods=['GET'])
+    def get_detected_kus():
+        try:
+            kus_list = getdetected_kus()
+            if kus_list is not None:
+                print(kus_list)
+                print("____")
+                print(jsonify(kus_list))
+                return kus_list, 200
+            else:
+                return jsonify({"error": "Failed to retrieve detected KUs"}), 500
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route('/repos/<string:repo_name>', methods=['PUT'])
     def edit_repo(repo_name):
         data = request.json
@@ -64,6 +78,15 @@ def init_routes(app):
         try:
             save_repo_to_db(repo_name, url, description, comments)
             return jsonify({"message": "Repository updated successfully"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/delete_repo/<string:repo_name>', methods=['DELETE'])
+    def delete_repo(repo_name):
+        try:
+            # Κλήση στη συνάρτηση που διαγράφει τα δεδομένα από τη βάση
+            delete_repo_from_db(repo_name)
+            return jsonify({"message": f"Repository '{repo_name}' and related data deleted successfully"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
