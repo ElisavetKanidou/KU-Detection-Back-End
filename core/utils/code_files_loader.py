@@ -1,4 +1,6 @@
 import os
+
+from api.data_db import get_analysis_withsha_db
 from .code_file import CodeFile
 
 
@@ -36,6 +38,9 @@ def read_files_from_dict_list(dict_list: list):
     contents = {}
 
     for contribution in dict_list:
+        if len(get_analysis_withsha_db(contribution["sha"]))!=0 :
+            continue
+
         filename = os.path.basename(contribution["temp_filepath"]).split(".")[0]
         contents[filename] = CodeFile(filename, contribution["file_content"], author=contribution["author"],
                                       timestamp=contribution["timestamp"], sha=contribution["sha"])

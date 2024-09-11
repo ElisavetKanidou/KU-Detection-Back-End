@@ -1,5 +1,7 @@
 import os
 import shutil
+
+from api.data_db import get_commits_from_db
 from config.settings import TEMP_FILES_BASE_PATH
 from core.git_operations import get_repo
 from .diff import get_contributions_from_diffs
@@ -15,18 +17,18 @@ def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=Fa
     repo = get_repo(repo_path)
     if fetch_updates:
         repo.remotes.origin.fetch()
-    processed_commits = set()
+    repo_name = repo.remotes['origin'].url.split('/')[-1].replace('.git', '')
+    dbcommits = get_commits_from_db(repo_name)
+    processed_commits = []
+    for dcommit in dbcommits:
+        processed_commits.append(dcommit['sha'])
 
     create_temp_dir()
 
     contributions = []
 
     # Iterate over commits in the active branch
-    i=1
     for commit in repo.iter_commits(max_count=commit_limit, skip=skip):
-        print(i)
-        print(commit_limit, skip)
-        i=i+1
         if commit.hexsha in processed_commits:
             continue
 
@@ -40,7 +42,6 @@ def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=Fa
         else:
             # This is a merge commit
             continue
-        print("Continued ... ")
 
         contributions += get_contributions_from_diffs(commit, diffs)
 

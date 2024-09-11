@@ -50,3 +50,18 @@ def get_all_branch_names(repo: git.Repo) -> list:
     :return: A list of the names of all branches (local and remote) in the given repository."""
     # noinspection PyTypeChecker
     return [branch.name for branch in repo.remote().refs]
+
+
+def pull_repo(repo_path: str) -> dict:
+    """Pulls the latest changes from the remote repository for the local repository at the specified path.
+
+    :param repo_path: The path to the local repository.
+    :return: A dictionary with the status of the pull operation."""
+    repo = get_repo(repo_path)
+    try:
+        origin = repo.remotes.origin
+        fetch_info = origin.fetch()  # Fetch the latest changes
+        pull_info = origin.pull()    # Pull the latest changes
+        return {"status": "success", "message": f"Repository updated successfully. {pull_info}"}
+    except git.GitCommandError as e:
+        return {"status": "error", "message": f"Error updating repository: {e}"}

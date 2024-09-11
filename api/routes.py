@@ -7,6 +7,7 @@ import datetime
 from api.data_db import save_commits_to_db, get_commits_from_db, save_analysis_to_db, save_repo_to_db, \
     get_all_repos_from_db, get_analysis_from_db, delete_repo_from_db, getdetected_kus
 from core.git_operations import clone_repo, repo_exists, extract_contributions
+from core.git_operations.repo import pull_repo
 from core.utils.code_files_loader import read_files_from_dict_list
 from core.ml_operations.loader import load_codebert_model
 from core.analysis.codebert_sliding_window import codebert_sliding_window
@@ -31,6 +32,9 @@ def init_routes(app):
 
         if not repo_exists(repo_name):
             clone_repo(repo_url, os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name)))
+        else:
+            # Pull the latest changes if the repository already exists
+            pull_repo(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name)))
 
         commits = extract_contributions(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", repo_name),
                                         commit_limit=commit_limit)
@@ -145,10 +149,6 @@ def init_routes(app):
 
         return Response(generate(), mimetype='text/event-stream')
 
-    from flask import Flask, jsonify, request
-
-    app = Flask(__name__)
-
     @app.route('/analyzedb', methods=['GET'])
     def analyzedb():
         try:
@@ -161,17 +161,21 @@ def init_routes(app):
             # Καλούμε τη συνάρτηση για να ανακτήσουμε τα δεδομένα από τη βάση
             analysis_data = get_analysis_from_db(repo_name)
 
+            #print(analysis_data)
+
             if analysis_data is None:
                 return jsonify({"error": "Failed to retrieve analysis data"}), 500
 
             # Επιστρέφουμε τα δεδομένα σε μορφή JSON
-            return jsonify(analysis_data), 200
+            return analysis_data, 200
 
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    if __name__ == '__main__':
-        app.run(debug=True)
+
+    from flask import Flask, jsonify, request
+
+    app = Flask(__name__)
 
 
 if __name__ == '__main__':

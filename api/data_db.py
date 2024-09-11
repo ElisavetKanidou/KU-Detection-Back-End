@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 
+
 import psycopg2
 
 # Database connection settings
@@ -269,32 +270,95 @@ def get_analysis_from_db(repo_name):
         conn = get_db_connection()
         cur = conn.cursor()
 
+        # Εκτέλεση του query για ανάκτηση των δεδομένων
         cur.execute('''
             SELECT filename, author, timestamp, sha, detected_kus, elapsed_time
             FROM analysis_results
             WHERE repo_name = %s
         ''', (repo_name,))
-
         rows = cur.fetchall()
 
+        # Λίστα για αποθήκευση των αποτελεσμάτων
         analysis_data = []
+
+        # Επεξεργασία των δεδομένων
         for row in rows:
             filename, author, timestamp, sha, detected_kus, elapsed_time = row
 
-            # Ανάγνωση και μετατροπή των δεδομένων από τη βάση
-            detected_kus_deserialized = json.loads(detected_kus)  # Convert JSON string back to Python object
+            # Αν η στήλη detected_kus είναι JSON string, κάνουμε deserialization
+            if isinstance(detected_kus, str):
+                detected_kus_deserialized = json.loads(detected_kus)
+            else:
+                detected_kus_deserialized = detected_kus  # Είναι ήδη αντικείμενο Python
+
+            # Μετατροπή του timestamp αν χρειάζεται
             timestamp_deserialized = datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
 
+            # Προσθήκη του λεξικού στη λίστα
             analysis_data.append({
                 "filename": filename,
                 "author": author,
-                "timestamp": timestamp_deserialized,
+                "timestamp": timestamp_deserialized.isoformat() if timestamp_deserialized else None,
                 "sha": sha,
                 "detected_kus": detected_kus_deserialized,
                 "elapsed_time": elapsed_time
             })
 
         cur.close()
+
+        # Επιστροφή της λίστας αποτελεσμάτων (analysis_data) ως απάντηση
+        return analysis_data
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+    finally:
+        conn.close()
+
+
+def get_analysis_withsha_db(sha):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Εκτέλεση του query για ανάκτηση των δεδομένων
+        cur.execute('''
+            SELECT filename, author, timestamp, sha, detected_kus, elapsed_time
+            FROM analysis_results
+            WHERE sha = %s
+        ''', (sha,))
+        rows = cur.fetchall()
+
+        # Λίστα για αποθήκευση των αποτελεσμάτων
+        analysis_data = []
+
+        # Επεξεργασία των δεδομένων
+        for row in rows:
+            filename, author, timestamp, sha, detected_kus, elapsed_time = row
+
+            # Αν η στήλη detected_kus είναι JSON string, κάνουμε deserialization
+            if isinstance(detected_kus, str):
+                detected_kus_deserialized = json.loads(detected_kus)
+            else:
+                detected_kus_deserialized = detected_kus  # Είναι ήδη αντικείμενο Python
+
+            # Μετατροπή του timestamp αν χρειάζεται
+            timestamp_deserialized = datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
+
+            # Προσθήκη του λεξικού στη λίστα
+            analysis_data.append({
+                "filename": filename,
+                "author": author,
+                "timestamp": timestamp_deserialized.isoformat() if timestamp_deserialized else None,
+                "sha": sha,
+                "detected_kus": detected_kus_deserialized,
+                "elapsed_time": elapsed_time
+            })
+
+        cur.close()
+
+        # Επιστροφή της λίστας αποτελεσμάτων (analysis_data) ως απάντηση
         return analysis_data
 
     except Exception as e:
