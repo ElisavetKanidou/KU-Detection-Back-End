@@ -34,7 +34,7 @@ def init_routes(app):
             clone_repo(repo_url, os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name)))
         else:
             # Pull the latest changes if the repository already exists
-            pull_repo(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name)))
+            print(pull_repo(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name))))
 
         commits = extract_contributions(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", repo_name),
                                         commit_limit=commit_limit)

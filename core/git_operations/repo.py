@@ -53,15 +53,29 @@ def get_all_branch_names(repo: git.Repo) -> list:
 
 
 def pull_repo(repo_path: str) -> dict:
-    """Pulls the latest changes from the remote repository for the local repository at the specified path.
+    """Forcefully pulls the latest changes from the remote repository for the local repository at the specified path.
 
     :param repo_path: The path to the local repository.
     :return: A dictionary with the status of the pull operation."""
     repo = get_repo(repo_path)
     try:
         origin = repo.remotes.origin
-        fetch_info = origin.fetch()  # Fetch the latest changes
-        pull_info = origin.pull()    # Pull the latest changes
-        return {"status": "success", "message": f"Repository updated successfully. {pull_info}"}
+
+        # Fetch latest changes from remote
+        origin.fetch()
+
+        # Get the default branch (like 'main' or 'master')
+        default_branch = origin.refs['HEAD'].reference.remote_head
+
+        # Forcefully reset the local branch to match the remote default branch
+        repo.git.reset('--hard', f'origin/{default_branch}')
+
+        # Clean untracked files
+        repo.git.clean('-fd')
+
+        return {"status": "success", "message": f"Repository forcefully updated to match 'origin/{default_branch}'."}
+
     except git.GitCommandError as e:
-        return {"status": "error", "message": f"Error updating repository: {e}"}
+        return {"status": "error", "message": f"Error forcefully updating repository: {e}"}
+
+
