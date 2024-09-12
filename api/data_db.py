@@ -316,6 +316,31 @@ def get_analysis_from_db(repo_name):
     finally:
         conn.close()
 
+def get_commits_timestamps_from_db(repo_name):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Εκτέλεση του query για να πάρουμε τα timestamps των commits για το συγκεκριμένο repo
+        cur.execute('''
+            SELECT timestamp
+            FROM analysis_results
+            WHERE repo_name = %s
+            ORDER BY timestamp ASC
+        ''', (repo_name,))
+
+        rows = cur.fetchall()
+        cur.close()
+
+        # Επιστρέφουμε μια λίστα με τα timestamps
+        timestamps = [row[0].isoformat() for row in rows]
+
+        return timestamps
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    finally:
+        conn.close()
 
 def get_analysis_withsha_db(sha):
     try:

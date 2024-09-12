@@ -5,9 +5,9 @@ import os
 import datetime
 
 from api.data_db import save_commits_to_db, get_commits_from_db, save_analysis_to_db, save_repo_to_db, \
-    get_all_repos_from_db, get_analysis_from_db, delete_repo_from_db, getdetected_kus
+    get_all_repos_from_db, get_analysis_from_db, delete_repo_from_db, getdetected_kus, get_commits_timestamps_from_db
 from core.git_operations import clone_repo, repo_exists, extract_contributions
-from core.git_operations.repo import pull_repo
+from core.git_operations.repo import pull_repo, get_history_repo
 from core.utils.code_files_loader import read_files_from_dict_list
 from core.ml_operations.loader import load_codebert_model
 from core.analysis.codebert_sliding_window import codebert_sliding_window
@@ -34,7 +34,7 @@ def init_routes(app):
             clone_repo(repo_url, os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name)))
         else:
             # Pull the latest changes if the repository already exists
-            print(pull_repo(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name))))
+            pull_repo(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", str(repo_name)))
 
         commits = extract_contributions(os.path.join(CLONED_REPO_BASE_PATH, "fake_session_id", repo_name),
                                         commit_limit=commit_limit)
@@ -82,6 +82,47 @@ def init_routes(app):
         try:
             save_repo_to_db(repo_name, url, description, comments)
             return jsonify({"message": "Repository updated successfully"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/timestamps', methods=['GET'])
+    def get_timestamps():
+        try:
+            repo_name = request.args.get('repo_name')
+
+            if not repo_name:
+                return jsonify({"error": "Repository name is required"}), 400
+
+            # Καλούμε την συνάρτηση για να ανακτήσουμε τα timestamps των commits από τη βάση δεδομένων
+            timestamps = get_commits_timestamps_from_db(repo_name)
+
+            if timestamps is None:
+                return jsonify({"error": "Failed to retrieve timestamps"}), 500
+
+            #print(timestamps)
+            return jsonify(timestamps), 200
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/historytime', methods=['GET'])
+    def historytime():
+        try:
+            # Λήψη του repo_url από τα query parameters
+            repo_url = request.args.get('repo_url')
+            if not repo_url:
+                return jsonify({"error": "Missing 'repo_url' parameter"}), 400
+
+            repo_name = repo_url.split('/')[-1].replace('.git', '')
+
+            # Κλήση της μεθόδου get_history_repo με το URL του repository
+            commit_history = get_history_repo(repo_url, repo_name, CLONED_REPO_BASE_PATH)
+
+            # Μετατροπή των timestamps σε string για να επιστραφούν στο JSON response
+            commit_dates = [dt.strftime('%Y-%m-%d %H:%M:%S') for dt in commit_history]
+
+            return jsonify({"repo_name": repo_name, "commit_dates": commit_dates}), 200
+
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 

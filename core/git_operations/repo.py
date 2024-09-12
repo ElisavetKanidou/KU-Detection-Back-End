@@ -1,7 +1,7 @@
 import git
 import os
 from config.settings import CLONED_REPO_BASE_PATH
-
+from datetime import datetime
 
 def repo_exists(repo_name: str) -> bool:
     """Checks if a repository with the given name exists in the current working directory.
@@ -78,4 +78,34 @@ def pull_repo(repo_path: str) -> dict:
     except git.GitCommandError as e:
         return {"status": "error", "message": f"Error forcefully updating repository: {e}"}
 
+def get_history_repo(repo_url: str, repo_name: str, base_path: str) -> list:
+    """Retrieves the commit history (timestamps) from the repository.
+    Clones the repository if it doesn't exist, or pulls the latest changes if it does.
+
+    :param repo_url: The URL of the repository.
+    :param repo_name: The name of the repository.
+    :param base_path: The base path where repositories are stored.
+    :return: A list of commit timestamps (datetime objects).
+    """
+    repo_path = os.path.join(base_path, "fake_session_id", repo_name)
+
+    # Ελέγξτε αν το repository υπάρχει
+    if not repo_exists(repo_name):
+        # Αν το repository δεν υπάρχει, κάντε clone
+        clone_result = clone_repo(repo_url, repo_path)
+        if clone_result["status"] == "error":
+            raise Exception(clone_result["message"])
+    else:
+        # Αν υπάρχει, κάντε pull τις τελευταίες αλλαγές
+        pull_result = pull_repo(repo_path)
+        if pull_result["status"] == "error":
+            raise Exception(pull_result["message"])
+
+    # Τώρα, μπορούμε να ανοίξουμε το τοπικό repository και να πάρουμε τα commits
+    repo = git.Repo(repo_path)
+    commits = list(repo.iter_commits())
+
+    # Εξαγωγή των timestamps από τα commits
+    timestamps = [datetime.fromtimestamp(commit.committed_date) for commit in commits]
+    return timestamps
 
