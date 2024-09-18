@@ -1,6 +1,6 @@
 import git
 import os
-from config.settings import CLONED_REPO_BASE_PATH
+from config.settings import CLONED_REPO_BASE_PATH, FILE_TYPE
 from datetime import datetime
 
 def repo_exists(repo_name: str) -> bool:
@@ -78,14 +78,15 @@ def pull_repo(repo_path: str) -> dict:
     except git.GitCommandError as e:
         return {"status": "error", "message": f"Error forcefully updating repository: {e}"}
 
+
 def get_history_repo(repo_url: str, repo_name: str, base_path: str) -> list:
-    """Retrieves the commit history (timestamps) from the repository.
-    Clones the repository if it doesn't exist, or pulls the latest changes if it does.
+    """Retrieves the commit history (timestamps) for the 100 most recent commits,
+    filtering commits that modify at least one Java file.
 
     :param repo_url: The URL of the repository.
     :param repo_name: The name of the repository.
     :param base_path: The base path where repositories are stored.
-    :return: A list of commit timestamps (datetime objects).
+    :return: A list of commit timestamps (datetime objects) for commits affecting Java files.
     """
     repo_path = os.path.join(base_path, "fake_session_id", repo_name)
 
@@ -101,11 +102,61 @@ def get_history_repo(repo_url: str, repo_name: str, base_path: str) -> list:
         if pull_result["status"] == "error":
             raise Exception(pull_result["message"])
 
-    # Τώρα, μπορούμε να ανοίξουμε το τοπικό repository και να πάρουμε τα commits
+    # Ανοίγουμε το τοπικό repository και παίρνουμε τα commits
     repo = git.Repo(repo_path)
-    commits = list(repo.iter_commits())
 
-    # Εξαγωγή των timestamps από τα commits
-    timestamps = [datetime.fromtimestamp(commit.committed_date) for commit in commits]
-    return timestamps
+    # Λαμβάνουμε τα 100 πιο πρόσφατα commits
+    commits = list(repo.iter_commits(max_count=100))
 
+    # Φιλτράρισμα commits που περιλαμβάνουν αλλαγές σε αρχεία του τύπου FILE_TYPE (.java)
+    java_file_commits = []
+    for commit in commits:
+        # Ελέγχουμε τα αρχεία που τροποποιήθηκαν στο commit
+        for relevant_path in commit.stats.files.keys():
+            if relevant_path.endswith(f".{FILE_TYPE}"):
+                java_file_commits.append(datetime.fromtimestamp(commit.committed_date))
+                break  # Σταματάμε μόλις βρούμε αρχείο του τύπου που μας ενδιαφέρει
+
+    return java_file_commits
+
+
+def get_previous_history_repo(repo_url: str, repo_name: str, base_path: str, last_commit_hash: str) -> list:
+    """Retrieves the commit history (timestamps) starting from the 101st commit and further back,
+    filtering commits that modify at least one Java file.
+
+    :param repo_url: The URL of the repository.
+    :param repo_name: The name of the repository.
+    :param base_path: The base path where repositories are stored.
+    :param last_commit_hash: The hash of the last commit from the previous retrieval.
+    :return: A list of commit timestamps (datetime objects) for older commits affecting Java files.
+    """
+    repo_path = os.path.join(base_path, "fake_session_id", repo_name)
+
+    # Ελέγξτε αν το repository υπάρχει
+    if not repo_exists(repo_name):
+        # Αν το repository δεν υπάρχει, κάντε clone
+        clone_result = clone_repo(repo_url, repo_path)
+        if clone_result["status"] == "error":
+            raise Exception(clone_result["message"])
+    else:
+        # Αν υπάρχει, κάντε pull τις τελευταίες αλλαγές
+        pull_result = pull_repo(repo_path)
+        if pull_result["status"] == "error":
+            raise Exception(pull_result["message"])
+
+    # Ανοίγουμε το τοπικό repository
+    repo = git.Repo(repo_path)
+
+    # Λαμβάνουμε τα commits ξεκινώντας από το συγκεκριμένο hash και πίσω (πέρα από τα 100 πρώτα)
+    commits = list(repo.iter_commits(f'{last_commit_hash}~1'))
+
+    # Φιλτράρισμα commits που περιλαμβάνουν αλλαγές σε αρχεία .java
+    java_file_commits = []
+    for commit in commits:
+        # Ελέγχουμε τα αρχεία που τροποποιήθηκαν στο commit
+        for file in commit.stats.files.keys():
+            if file.endswith('.java'):
+                java_file_commits.append(datetime.fromtimestamp(commit.committed_date))
+                break  # Σταματάμε μόλις βρούμε αρχείο .java για το συγκεκριμένο commit
+
+    return java_file_commits

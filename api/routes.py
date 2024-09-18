@@ -63,9 +63,9 @@ def init_routes(app):
         try:
             kus_list = getdetected_kus()
             if kus_list is not None:
-                print(kus_list)
-                print("____")
-                print(jsonify(kus_list))
+                #print(kus_list)
+                #print("____")
+                #print(jsonify(kus_list))
                 return kus_list, 200
             else:
                 return jsonify({"error": "Failed to retrieve detected KUs"}), 500

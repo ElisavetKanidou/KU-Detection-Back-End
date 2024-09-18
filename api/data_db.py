@@ -318,12 +318,12 @@ def get_analysis_from_db(repo_name):
 
 def get_commits_timestamps_from_db(repo_name):
     try:
-        conn = get_db_connection()
+        conn = get_db_connection()  # Σύνδεση με τη βάση δεδομένων
         cur = conn.cursor()
 
-        # Εκτέλεση του query για να πάρουμε τα timestamps των commits για το συγκεκριμένο repo
+        # Εκτέλεση του query για να πάρουμε μοναδικά timestamps από τα commits
         cur.execute('''
-            SELECT timestamp
+            SELECT DISTINCT timestamp
             FROM analysis_results
             WHERE repo_name = %s
             ORDER BY timestamp ASC
@@ -333,14 +333,15 @@ def get_commits_timestamps_from_db(repo_name):
         cur.close()
 
         # Επιστρέφουμε μια λίστα με τα timestamps
-        timestamps = [row[0].isoformat() for row in rows]
+        timestamps = [row[0].isoformat() for row in rows]  # row[0] είναι το timestamp
 
         return timestamps
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
     finally:
-        conn.close()
+        conn.close()  # Κλείνουμε τη σύνδεση
+
 
 def get_analysis_withsha_db(sha):
     try:
