@@ -1,0 +1,41 @@
+version: "2.2"
+services:
+  #ku-detection-frontend:
+  #  container_name: ku-detection-frontend
+  #  image: nikosnikolaidis/ku-detection-front-end
+  #  environment:
+  #    - VITE_API_URL=http://localhost:5000
+  #  ports:
+  #    - '5173:5173'
+  
+  ku-detection-backend:
+    container_name: ku-detection-backend
+    build:
+      context: .
+    depends_on:
+      - ku-detection-db
+    environment:
+      - DB_HOST=ku-detection-db
+      - DB_PORT=5432
+      - DB_NAME=test
+      - DB_USER=root
+      - DB_PASSWORD=root
+    ports:
+      - '5000:5000'
+
+  ku-detection-db:
+    image: postgres:16.2
+    container_name: ku-detection-db
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: test
+    #volumes:
+    #  - ku_detection_postgresql:/var/lib/postgresql
+    #  - ku_detection_postgresql_data:/var/lib/postgresql/data
+    ports:
+      - '5430:5432'
+
+#volumes:
+#  ku_detection_postgresql:
+#  ku_detection_postgresql_data:
