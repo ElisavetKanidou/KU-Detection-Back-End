@@ -183,7 +183,6 @@ def init_routes(app):
                     "elapsed_time": elapsed_time
                 }
                 analysis_results.append(file_data)
-                print("data:  "+str(file_data))
                 yield f"data: {json.dumps(file_data)}\n\n"
 
             save_analysis_to_db(repo_name, analysis_results)

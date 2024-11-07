@@ -1,15 +1,18 @@
 import json
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 
 
 import psycopg2
 
 # Database connection settings
-DB_HOST = 'localhost'
-DB_PORT = '5432'
-DB_NAME = 'test'
-DB_USER = 'root'
-DB_PASSWORD = '30a301d725711'
+load_dotenv()
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 def get_db_connection():
     conn = psycopg2.connect(
@@ -22,6 +25,14 @@ def get_db_connection():
     return conn
 
 def create_tables():
+    table_check_query = '''
+    SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'repositories'
+    );
+    '''
+
     commands = [
         '''
         CREATE TABLE repositories (
@@ -64,6 +75,15 @@ def create_tables():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        # Check if tables already exists
+        cur.execute(table_check_query)
+        (table_exists,) = cur.fetchone()
+        if table_exists:
+            print("Tables already exists. Skipping table creation.")
+            return
+
+        # Create tables
         for command in commands:
             cur.execute(command)
         cur.close()
