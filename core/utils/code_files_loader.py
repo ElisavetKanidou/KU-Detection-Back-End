@@ -25,6 +25,15 @@ def read_files_from_directory(directory: str):
     return contents
 
 
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
+
 def read_files_from_dict_list(dict_list: list):
     """
     Read the contents of all .java files in the directories found inside the git contribution dictionaries.
@@ -36,13 +45,35 @@ def read_files_from_dict_list(dict_list: list):
         dict: A dictionary with filenames as keys and their CodeFile objects as values.
     """
     contents = {}
+    logging.info("Starting to process the dictionary list for file contributions.")
 
     for contribution in dict_list:
-        if len(get_analysis_withsha_db(contribution["sha"]))!=0 :
-            continue
+        try:
+            sha = contribution["sha"]
+            temp_filepath = contribution["temp_filepath"]
+            logging.debug(f"Processing contribution with SHA: {sha} and temp filepath: {temp_filepath}")
 
-        filename = os.path.basename(contribution["temp_filepath"]).split(".")[0]
-        contents[filename] = CodeFile(filename, contribution["file_content"], author=contribution["author"],
-                                      timestamp=contribution["timestamp"], sha=contribution["sha"])
+            # Check if the analysis already exists in the database
+            existing_analysis = get_analysis_withsha_db(sha)
+            if len(existing_analysis) != 0:
+                logging.info(f"Skipping contribution with SHA: {sha}, analysis already exists.")
+                continue
 
+            filename = os.path.basename(temp_filepath).split(".")[0]
+            contents[filename] = CodeFile(
+                filename,
+                contribution["file_content"],
+                author=contribution["author"],
+                timestamp=contribution["timestamp"],
+                sha=sha,
+            )
+            logging.debug(f"Successfully processed file: {filename}")
+
+        except KeyError as e:
+            logging.error(f"KeyError: Missing key {e} in contribution: {contribution}")
+        except Exception as e:
+            logging.exception(f"An unexpected error occurred while processing contribution: {contribution}")
+
+    logging.info("Finished processing all contributions.")
     return contents
+

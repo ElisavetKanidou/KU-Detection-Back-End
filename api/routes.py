@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify, Response, stream_with_context
-import json
-import time
 import os
+import logging
+import json
 import datetime
+from flask import Flask, request, jsonify, Response, stream_with_context
+import time
 
 from api.data_db import save_commits_to_db, get_commits_from_db, save_analysis_to_db, save_repo_to_db, \
     get_all_repos_from_db, get_analysis_from_db, delete_repo_from_db, getdetected_kus, get_commits_timestamps_from_db
@@ -143,52 +144,84 @@ def init_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+
+    # Configure logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+
     @app.route('/analyze', methods=['GET'])
     def analyze():
         repo_url = request.args.get('repo_url')
 
         if not repo_url:
+            logging.error("No repository URL provided.")
             return jsonify({"error": "Repository URL is required"}), 400
 
         repo_name = repo_url.split('/')[-1].replace('.git', '')
+        logging.info(f"Starting analysis for repository: {repo_name}")
 
+        # Get commits from the database
         commits = get_commits_from_db(repo_name)
 
         if not commits:
+            logging.error(f"No commits found for repository: {repo_name}")
             return jsonify({"error": "No commits found for the repository"}), 400
 
-        files = read_files_from_dict_list(commits)
+        try:
+            # Read files from the commits
+            files = read_files_from_dict_list(commits)
+            logging.info(f"Retrieved {len(files)} files for analysis.")
 
-        analysis_results = []
+            analysis_results = []
 
-        @stream_with_context
-        def generate():
-            for file in files.values():
-                start_time = time.time()
-                results = codebert_sliding_window([file], 35, 35, 1, 25, model)
-                end_time = time.time()
-                elapsed_time = end_time - start_time
+            @stream_with_context
+            def generate():
+                analyzed_files_count = 0
 
-                if isinstance(file.timestamp, datetime.datetime):
-                    timestmp = file.timestamp.isoformat()
-                else:
-                    timestmp = file.timestamp
+                for file in files.values():
+                    try:
+                        logging.debug(f"Analyzing file: {file.filename}")
+                        start_time = time.time()
+                        results = codebert_sliding_window([file], 35, 35, 1, 25, model)
+                        end_time = time.time()
+                        elapsed_time = end_time - start_time
 
-                file_data = {
-                    "filename": file.filename,
-                    "author": file.author,
-                    "timestamp": timestmp,
-                    "sha": file.sha,
-                    "detected_kus": file.ku_results,
-                    "elapsed_time": elapsed_time
-                }
-                analysis_results.append(file_data)
-                yield f"data: {json.dumps(file_data)}\n\n"
+                        if isinstance(file.timestamp, datetime.datetime):
+                            timestmp = file.timestamp.isoformat()
+                        else:
+                            timestmp = file.timestamp
 
-            save_analysis_to_db(repo_name, analysis_results)
-            yield "data: end\n\n"
+                        file_data = {
+                            "filename": file.filename,
+                            "author": file.author,
+                            "timestamp": timestmp,
+                            "sha": file.sha,
+                            "detected_kus": file.ku_results,
+                            "elapsed_time": elapsed_time
+                        }
+                        analysis_results.append(file_data)
+                        yield f"data: {json.dumps(file_data)}\n\n"
+                        analyzed_files_count += 1
+                        logging.info(f"Successfully analyzed file {analyzed_files_count}/{len(files)}: {file.filename}")
 
-        return Response(generate(), mimetype='text/event-stream')
+                    except Exception as e:
+                        logging.exception(
+                            f"Error analyzing file: {file.filename}. Total analyzed before error: {analyzed_files_count}.")
+                        raise
+
+                # Save results to the database
+                save_analysis_to_db(repo_name, analysis_results)
+                logging.info(
+                    f"Analysis completed for repository: {repo_name}. Total files analyzed: {len(analysis_results)}")
+                yield "data: end\n\n"
+
+            return Response(generate(), mimetype='text/event-stream')
+
+        except Exception as e:
+            logging.exception(f"Unexpected error during analysis for repository: {repo_name}")
+            return jsonify({"error": "An error occurred during analysis"}), 500
 
     @app.route('/analyzedb', methods=['GET'])
     def analyzedb():
