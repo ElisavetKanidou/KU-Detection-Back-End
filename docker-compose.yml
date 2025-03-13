@@ -1,12 +1,12 @@
 version: "2.2"
 services:
-  ku-detection-frontend:
-    container_name: ku-detection-frontend
-    image: nikosnikolaidis/ku-detection-front-end
-    environment:
-      - VITE_API_URL=http://195.251.210.251:5000
-    ports:
-      - '5173:5173'
+#  ku-detection-frontend:
+#    container_name: ku-detection-frontend
+#    image: nikosnikolaidis/ku-detection-front-end
+#    environment:
+#      - VITE_API_URL=http://195.251.210.251:5000
+#    ports:
+#      - '5173:5173'
 
   ku-detection-backend:
     container_name: ku-detection-backend

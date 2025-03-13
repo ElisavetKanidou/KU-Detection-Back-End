@@ -3,5 +3,6 @@ venv/
 run.py
 __pycache__/
 cloned_repos/
+models/codebert/model.safetensors
 temp
 output
