@@ -1,0 +1,6 @@
+site_name: SKILLAB KU Detection
+repo_url: https://github.com/skillab-project/KU-Detection
+
+nav:
+  - General Info: 'index.md'
+  - Testing: 'tests.md'
