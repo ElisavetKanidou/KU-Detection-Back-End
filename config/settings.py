@@ -6,7 +6,7 @@ OUTPUT_FILES_BASE_PATH = os.path.normpath(os.path.join(ROOT_DIR, "output"))
 CLONED_REPO_BASE_PATH = os.path.normpath(os.path.join(ROOT_DIR, "cloned_repos"))
 MODELS_BASE_PATH = os.path.normpath(os.path.join(ROOT_DIR, "models", "binary_classifiers"))
 CODEBERT_BASE_PATH = os.path.normpath(os.path.join(ROOT_DIR, "models", "codebert"))
-FILE_TYPE = "java"
+FILE_TYPE = "py"
 MODELS_TO_LOAD = [
     "K2",
     "K3",

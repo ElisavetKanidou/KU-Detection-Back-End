@@ -150,13 +150,13 @@ def get_previous_history_repo(repo_url: str, repo_name: str, base_path: str, las
     # Λαμβάνουμε τα commits ξεκινώντας από το συγκεκριμένο hash και πίσω (πέρα από τα 100 πρώτα)
     commits = list(repo.iter_commits(f'{last_commit_hash}~1'))
 
-    # Φιλτράρισμα commits που περιλαμβάνουν αλλαγές σε αρχεία .java
+    # Φιλτράρισμα commits που περιλαμβάνουν αλλαγές σε αρχεία .py
     java_file_commits = []
     for commit in commits:
         # Ελέγχουμε τα αρχεία που τροποποιήθηκαν στο commit
         for file in commit.stats.files.keys():
-            if file.endswith('.java'):
+            if file.endswith('.py'):
                 java_file_commits.append(datetime.fromtimestamp(commit.committed_date))
-                break  # Σταματάμε μόλις βρούμε αρχείο .java για το συγκεκριμένο commit
+                break  # Σταματάμε μόλις βρούμε αρχείο .py για το συγκεκριμένο commit
 
     return java_file_commits

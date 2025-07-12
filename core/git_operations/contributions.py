@@ -13,6 +13,8 @@ def create_temp_dir():
         shutil.rmtree(TEMP_FILES_BASE_PATH)
     os.mkdir(TEMP_FILES_BASE_PATH)
 
+
+'''
 def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=False,):
     repo = get_repo(repo_path)
     if fetch_updates:
@@ -46,8 +48,8 @@ def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=Fa
         contributions += get_contributions_from_diffs(commit, diffs)
 
     return contributions
-
 '''
+
 def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=False):
     repo = get_repo(repo_path)
     if fetch_updates:
@@ -121,4 +123,4 @@ def extract_contributions(repo_path, commit_limit=None, skip=0, fetch_updates=Fa
 
     return contributions
 
-'''
+
