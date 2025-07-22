@@ -743,8 +743,6 @@ def get_ku_counts_by_organization():
             conn.close()
 
 
-# ΠΡΟΣΘΕΣΕ ΑΥΤΗ ΤΗ ΣΥΝΑΡΤΗΣΗ ΣΤΟ data_db.py
-
 def get_monthly_analysis_counts_by_org():
     """
     Επιστρέφει το πλήθος των αναλύσεων ανά μήνα, ομαδοποιημένο ανά οργανισμό.
