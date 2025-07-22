@@ -24,6 +24,10 @@ from api.data_db import (
     update_analysis_status,
     get_analysis_status,
     get_allanalysis_from_db,
+    get_ku_counts_from_db,
+    get_organization_project_counts,
+    get_ku_counts_by_organization,
+    get_monthly_analysis_counts_by_org,
 )
 from core.git_operations import clone_repo, repo_exists, extract_contributions
 from core.git_operations.repo import pull_repo, get_history_repo
@@ -147,7 +151,6 @@ def init_routes(app):
     swaggerui_blueprint = get_swaggerui_blueprint(SWAGGER_URL, API_URL, config={"app_name": "KU-Detection-Back-End API"})
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
-    # --- ΟΛΑ ΤΑ ΥΠΟΛΟΙΠΑ ENDPOINTS ΣΟΥ ΠΑΡΑΜΕΝΟΥΝ ΙΔΙΑ ---
     # ( /commits, /repos, /detected_kus, etc. )
     @app.route("/commits", methods=["POST"])
     def list_commits():
@@ -169,7 +172,6 @@ def init_routes(app):
             logging.exception("Error during git operations in list_commits")
             return jsonify({"error": str(e)}), 500
 
-    # ... (Όλα τα άλλα endpoints σου εδώ, χωρίς καμία αλλαγή) ...
     @app.route("/repos", methods=["POST"])
     def create_repo():
         data = request.json
@@ -327,6 +329,79 @@ def init_routes(app):
                 return jsonify({"error": "Failed to retrieve all analysis data"}), 500
             return jsonify(analysis_data), 200
         except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+
+    # --- ΝΕΟ ENDPOINT ΓΙΑ ΤΑ ΣΤΑΤΙΣΤΙΚΑ ΤΩΝ KUs ---
+    @app.route("/ku_statistics", methods=["GET"])
+    def get_ku_statistics():
+        """
+        Επιστρέφει μια λίστα με όλα τα μοναδικά KUs και το πλήθος
+        των εμφανίσεών τους σε όλα τα projects.
+        """
+        try:
+            # Κάλεσε τη νέα συνάρτηση που έφτιαξες στο data_db.py
+            ku_counts = get_ku_counts_from_db()
+
+            if ku_counts is not None:
+                # Αν όλα πήγαν καλά, στείλε τα δεδομένα ως JSON
+                return jsonify(ku_counts), 200
+            else:
+                # Αν η συνάρτηση επέστρεψε None (π.χ. λόγω σφάλματος)
+                return jsonify({"error": "Failed to retrieve KU statistics"}), 500
+        except Exception as e:
+            # Γενικό σφάλμα
+            logging.exception("Error in /ku_statistics endpoint")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/organization_stats", methods=["GET"])
+    def get_organization_statistics():
+        """
+        Επιστρέφει μια λίστα με τα ονόματα των οργανισμών (π.χ. 'apache')
+        και τον αριθμό των projects που έχουμε αποθηκευμένα για τον καθένα.
+        """
+        try:
+            # Κάλεσε τη νέα συνάρτηση από το data_db.py
+            org_counts = get_organization_project_counts()
+
+            if org_counts is not None:
+                return jsonify(org_counts), 200
+            else:
+                return jsonify({"error": "Failed to retrieve organization statistics"}), 500
+        except Exception as e:
+            logging.exception("Error in /organization_stats endpoint")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/ku_by_organization", methods=["GET"])
+    def get_ku_by_organization_stats():
+        """
+        Επιστρέφει μια λίστα οργανισμών, και για τον καθένα, μια λίστα
+        με τα KUs που εντοπίστηκαν στα projects του και το πλήθος τους.
+        """
+        try:
+            data = get_ku_counts_by_organization()
+            if data is not None:
+                return jsonify(data), 200
+            else:
+                return jsonify({"error": "Failed to retrieve KU statistics by organization"}), 500
+        except Exception as e:
+            logging.exception("Error in /ku_by_organization endpoint")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/monthly_analysis_stats", methods=["GET"])
+    def get_monthly_analysis_statistics():
+        """
+        Επιστρέφει μια λίστα οργανισμών, και για τον καθένα, το πλήθος
+        των αναλύσεων που έγιναν ανά μήνα στα projects του.
+        """
+        try:
+            data = get_monthly_analysis_counts_by_org()
+            if data is not None:
+                return jsonify(data), 200
+            else:
+                return jsonify({"error": "Failed to retrieve monthly analysis statistics"}), 500
+        except Exception as e:
+            logging.exception("Error in /monthly_analysis_stats endpoint")
             return jsonify({"error": str(e)}), 500
 
 

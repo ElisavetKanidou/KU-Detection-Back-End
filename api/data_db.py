@@ -590,3 +590,215 @@ def analyze_repository_background(repo_name, files):
     logging.info(f"Analysis completed for repository: {repo_name}. Total files analyzed: {len(analysis_results)}")
     update_analysis_status(repo_name, 'completed', start_time=start_time, end_time=end_time, progress=100)
     yield f"data: {json.dumps({'progress': 100, 'message': 'Analysis completed'})}\n\n"
+
+
+def get_ku_counts_from_db():
+    """
+    Ανακτά από τη βάση δεδομένων το συνολικό πλήθος εμφάνισης κάθε KU
+    σε όλα τα repositories, διαβάζοντας σωστά τη δομή JSON object.
+    """
+    # Αυτό είναι το ΔΙΟΡΘΩΜΕΝΟ SQL query.
+    # 1. jsonb_each_text(detected_kus): "Σπάει" το JSON object σε σειρές,
+    #    με μια στήλη για το κλειδί (key) και μια για την τιμή (value).
+    # 2. WHERE ku.value = '1': Φιλτράρει και κρατάει μόνο τα KUs που έχουν εντοπιστεί.
+    # 3. GROUP BY ku.key: Ομαδοποιεί με βάση το όνομα του KU.
+    sql_query = """
+        SELECT
+            ku.key AS ku_id,
+            COUNT(*) AS ku_count
+        FROM
+            analysis_results,
+            LATERAL jsonb_each_text(detected_kus) AS ku
+        WHERE
+            ku.value = '1'
+        GROUP BY
+            ku.key
+        ORDER BY
+            ku_count DESC;
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(sql_query)
+        rows = cur.fetchall()
+        cur.close()
+
+        # Η μετατροπή του αποτελέσματος παραμένει ίδια
+        ku_counts = [{"ku_id": row[0], "count": int(row[1])} for row in rows]
+
+        return ku_counts
+
+    except Exception as e:
+        print(f"An error occurred while getting KU counts: {e}")
+        return None
+    finally:
+        if 'conn' in locals() and conn is not None:
+            conn.close()
+
+
+def get_organization_project_counts():
+    """
+    Ανακτά από τη βάση δεδομένων το πλήθος των projects ανά οργανισμό,
+    βασιζόμενο στο URL του repository.
+    """
+    # Το SQL query που εξάγει το όνομα του οργανισμού και μετράει.
+    # 1. split_part(url, '/', 4): Σπάει το URL με το '/' και παίρνει το 4ο κομμάτι.
+    #    (π.χ., από 'https://github.com/apache/kafka', παίρνει το 'apache').
+    # 2. WHERE url LIKE 'https://github.com/%/%': Εξασφαλίζει ότι επεξεργαζόμαστε
+    #    μόνο έγκυρα URL του GitHub για να αποφύγουμε σφάλματα.
+    # 3. GROUP BY και COUNT(*): Ομαδοποιεί με βάση το όνομα του οργανισμού και μετράει.
+    sql_query = """
+        SELECT
+            split_part(url, '/', 4) AS organization_name,
+            COUNT(*) AS project_count
+        FROM
+            repositories
+        WHERE
+            url LIKE 'https://github.com/%/%'
+        GROUP BY
+            organization_name
+        HAVING
+            COUNT(*) > 0
+        ORDER BY
+            project_count DESC;
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(sql_query)
+        rows = cur.fetchall()
+        cur.close()
+
+        # Μετατροπή του αποτελέσματος σε list of dictionaries
+        org_counts = [{"organization": row[0], "count": row[1]} for row in rows]
+
+        return org_counts
+
+    except Exception as e:
+        print(f"An error occurred while getting organization counts: {e}")
+        return None
+    finally:
+        if 'conn' in locals() and conn is not None:
+            conn.close()
+
+
+def get_ku_counts_by_organization():
+    """
+    Επιστρέφει τα στατιστικά των KUs ομαδοποιημένα ανά οργανισμό.
+    """
+    # Το SQL query συνδυάζει τους δύο πίνακες, εξάγει τα δεδομένα,
+    # και τα ομαδοποιεί.
+    sql_query = """
+        SELECT
+            split_part(r.url, '/', 4) AS organization_name,
+            ku.key AS ku_id,
+            COUNT(*) AS ku_count
+        FROM
+            analysis_results ar
+        JOIN
+            repositories r ON ar.repo_name = r.name
+        ,
+            LATERAL jsonb_each_text(ar.detected_kus) AS ku
+        WHERE
+            r.url LIKE 'https://github.com/%/%' AND ku.value = '1'
+        GROUP BY
+            organization_name, ku_id
+        ORDER BY
+            organization_name, ku_count DESC;
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(sql_query)
+        rows = cur.fetchall()
+        cur.close()
+
+        # Επεξεργασία των "επίπεδων" αποτελεσμάτων για να δημιουργηθεί
+        # μια ένθετη (nested) δομή.
+        organizations_data = {}
+        for row in rows:
+            org_name, ku_id, ku_count = row
+
+            # Αν ο οργανισμός δεν υπάρχει στο λεξικό μας, τον προσθέτουμε.
+            if org_name not in organizations_data:
+                organizations_data[org_name] = {
+                    "organization": org_name,
+                    "ku_counts": []
+                }
+
+            # Προσθέτουμε τα στατιστικά του KU στη λίστα του οργανισμού.
+            organizations_data[org_name]["ku_counts"].append({
+                "ku_id": ku_id,
+                "count": ku_count
+            })
+
+        # Μετατρέπουμε το λεξικό σε λίστα, που είναι η τελική μορφή.
+        return list(organizations_data.values())
+
+    except Exception as e:
+        print(f"An error occurred while getting KU counts by organization: {e}")
+        return None
+    finally:
+        if 'conn' in locals() and conn is not None:
+            conn.close()
+
+
+# ΠΡΟΣΘΕΣΕ ΑΥΤΗ ΤΗ ΣΥΝΑΡΤΗΣΗ ΣΤΟ data_db.py
+
+def get_monthly_analysis_counts_by_org():
+    """
+    Επιστρέφει το πλήθος των αναλύσεων ανά μήνα, ομαδοποιημένο ανά οργανισμό.
+    """
+    # Το SQL query που κάνει την ομαδοποίηση στη βάση.
+    # DATE_TRUNC('month', ar.timestamp) ομαδοποιεί όλες τις ημερομηνίες
+    # ενός μήνα στην πρώτη μέρα του μήνα, επιτρέποντας το GROUP BY.
+    sql_query = """
+        SELECT
+            split_part(r.url, '/', 4) AS organization_name,
+            DATE_TRUNC('month', ar.timestamp)::date AS analysis_month,
+            COUNT(ar.id) AS analysis_count
+        FROM
+            analysis_results ar
+        JOIN
+            repositories r ON ar.repo_name = r.name
+        WHERE
+            r.url LIKE 'https://github.com/%/%'
+        GROUP BY
+            organization_name, analysis_month
+        ORDER BY
+            organization_name, analysis_month;
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(sql_query)
+        rows = cur.fetchall()
+        cur.close()
+
+        # Επεξεργασία των αποτελεσμάτων για να δημιουργηθεί η ένθετη δομή
+        organizations_data = {}
+        for row in rows:
+            org_name, month_date, analysis_count = row
+
+            # Αν ο οργανισμός δεν υπάρχει στο λεξικό, τον δημιουργούμε
+            if org_name not in organizations_data:
+                organizations_data[org_name] = {
+                    "organization": org_name,
+                    "monthly_counts": []
+                }
+
+            # Προσθέτουμε τα στατιστικά του μήνα στη λίστα του οργανισμού
+            organizations_data[org_name]["monthly_counts"].append({
+                "month": month_date.strftime('%Y-%m'),  # Μορφοποίηση σε 'ΕΕΕΕ-ΜΜ'
+                "count": analysis_count
+            })
+
+        # Μετατροπή του λεξικού σε λίστα για την τελική απάντηση
+        return list(organizations_data.values())
+
+    except Exception as e:
+        print(f"An error occurred while getting monthly analysis counts by org: {e}")
+        return None
+    finally:
+        if 'conn' in locals() and conn is not None:
+            conn.close()
