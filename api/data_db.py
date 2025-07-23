@@ -47,6 +47,7 @@ def create_tables():
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) UNIQUE NOT NULL,
             url VARCHAR(255),
+            organization VARCHAR(255),
             description TEXT,
             comments TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -89,14 +90,21 @@ def create_tables():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Check if tables already exists
         cur.execute(table_check_query)
         (table_exists,) = cur.fetchone()
         if table_exists:
-            print("Tables already exists. Skipping table creation.")
+            print("Tables already exist. Skipping table creation.")
+            cur.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='repositories' AND column_name='organization'
+            """)
+            if cur.fetchone() is None:
+                print("Adding 'organization' column to existing 'repositories' table.")
+                cur.execute("ALTER TABLE repositories ADD COLUMN organization VARCHAR(255);")
+                conn.commit()
             return
 
-        # Create tables
         for command in commands:
             cur.execute(command)
         cur.close()
@@ -107,19 +115,21 @@ def create_tables():
         if conn is not None:
             conn.close()
 
-def save_repo_to_db(name, url=None, description=None, comments=None):
+# --- ΔΙΟΡΘΩΣΗ: Η συνάρτηση πλέον δέχεται τον οργανισμό ως παράμετρο ---
+def save_repo_to_db(name, url=None, organization=None, description=None, comments=None):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
-            INSERT INTO repositories (name, url, description, comments)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO repositories (name, url, organization, description, comments)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (name) DO UPDATE
             SET url = EXCLUDED.url,
+                organization = EXCLUDED.organization,
                 description = EXCLUDED.description,
                 comments = EXCLUDED.comments,
                 updated_at = CURRENT_TIMESTAMP
-        ''', (name, url, description, comments))
+        ''', (name, url, organization, description, comments))
         conn.commit()
         cur.close()
     except Exception as e:
@@ -131,27 +141,14 @@ def delete_repo_from_db(repo_name):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-
-        # Διαγραφή από τον πίνακα analysis_results
-        cur.execute('''
-            DELETE FROM analysis_results WHERE repo_name = %s
-        ''', (repo_name,))
-
-        # Διαγραφή από τον πίνακα commits
-        cur.execute('''
-            DELETE FROM commits WHERE repo_name = %s
-        ''', (repo_name,))
-
-        # Διαγραφή από τον πίνακα repositories
-        cur.execute('''
-            DELETE FROM repositories WHERE name = %s
-        ''', (repo_name,))
-
+        cur.execute('DELETE FROM analysis_results WHERE repo_name = %s', (repo_name,))
+        cur.execute('DELETE FROM commits WHERE repo_name = %s', (repo_name,))
+        cur.execute('DELETE FROM repositories WHERE name = %s', (repo_name,))
         conn.commit()
         cur.close()
     except Exception as e:
         print(f"An error occurred: {e}")
-        raise e  # Ξαναπετάμε το σφάλμα για να το διαχειριστεί η διαδρομή Flask
+        raise e
     finally:
         conn.close()
 
@@ -160,29 +157,29 @@ def get_all_repos_from_db():
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute('''
-                    SELECT name, url, description, comments, created_at, updated_at, analysis_status, analysis_start_time, analysis_end_time, analysis_progress, analysis_error_message
+                    SELECT name, url, organization, description, comments, created_at, updated_at, 
+                           analysis_status, analysis_start_time, analysis_end_time, 
+                           analysis_progress, analysis_error_message
                     FROM repositories;
                 ''')
-
                 rows = cur.fetchall()
-
                 repos = []
                 for row in rows:
                     repo = {
                         "name": row[0],
                         "url": row[1],
-                        "description": row[2],
-                        "comments": row[3],
-                        "created_at": row[4].isoformat() if row[4] else None,
-                        "updated_at": row[5].isoformat() if row[5] else None,
-                        "analysis_status": row[6],
-                        "analysis_start_time": row[7].isoformat() if row[7] else None,
-                        "analysis_end_time": row[8].isoformat() if row[8] else None,
-                        "analysis_progress": row[9],
-                        "analysis_error_message": row[10]
+                        "organization": row[2],
+                        "description": row[3],
+                        "comments": row[4],
+                        "created_at": row[5].isoformat() if row[5] else None,
+                        "updated_at": row[6].isoformat() if row[6] else None,
+                        "analysis_status": row[7],
+                        "analysis_start_time": row[8].isoformat() if row[8] else None,
+                        "analysis_end_time": row[9].isoformat() if row[9] else None,
+                        "analysis_progress": row[10],
+                        "analysis_error_message": row[11]
                     }
                     repos.append(repo)
-
                 return repos
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -591,17 +588,7 @@ def analyze_repository_background(repo_name, files):
     update_analysis_status(repo_name, 'completed', start_time=start_time, end_time=end_time, progress=100)
     yield f"data: {json.dumps({'progress': 100, 'message': 'Analysis completed'})}\n\n"
 
-
 def get_ku_counts_from_db():
-    """
-    Ανακτά από τη βάση δεδομένων το συνολικό πλήθος εμφάνισης κάθε KU
-    σε όλα τα repositories, διαβάζοντας σωστά τη δομή JSON object.
-    """
-    # Αυτό είναι το ΔΙΟΡΘΩΜΕΝΟ SQL query.
-    # 1. jsonb_each_text(detected_kus): "Σπάει" το JSON object σε σειρές,
-    #    με μια στήλη για το κλειδί (key) και μια για την τιμή (value).
-    # 2. WHERE ku.value = '1': Φιλτράρει και κρατάει μόνο τα KUs που έχουν εντοπιστεί.
-    # 3. GROUP BY ku.key: Ομαδοποιεί με βάση το όνομα του KU.
     sql_query = """
         SELECT
             ku.key AS ku_id,
@@ -612,7 +599,7 @@ def get_ku_counts_from_db():
         WHERE
             ku.value = '1'
         GROUP BY
-            ku.key
+            ku_id
         ORDER BY
             ku_count DESC;
     """
@@ -622,12 +609,8 @@ def get_ku_counts_from_db():
         cur.execute(sql_query)
         rows = cur.fetchall()
         cur.close()
-
-        # Η μετατροπή του αποτελέσματος παραμένει ίδια
         ku_counts = [{"ku_id": row[0], "count": int(row[1])} for row in rows]
-
         return ku_counts
-
     except Exception as e:
         print(f"An error occurred while getting KU counts: {e}")
         return None
@@ -636,29 +619,22 @@ def get_ku_counts_from_db():
             conn.close()
 
 
+# --- ΔΙΟΡΘΩΣΗ: Χρησιμοποιεί τη στήλη 'organization' αντί για split_part ---
 def get_organization_project_counts():
     """
     Ανακτά από τη βάση δεδομένων το πλήθος των projects ανά οργανισμό,
-    βασιζόμενο στο URL του repository.
+    βασιζόμενο στην στήλη 'organization'.
     """
-    # Το SQL query που εξάγει το όνομα του οργανισμού και μετράει.
-    # 1. split_part(url, '/', 4): Σπάει το URL με το '/' και παίρνει το 4ο κομμάτι.
-    #    (π.χ., από 'https://github.com/apache/kafka', παίρνει το 'apache').
-    # 2. WHERE url LIKE 'https://github.com/%/%': Εξασφαλίζει ότι επεξεργαζόμαστε
-    #    μόνο έγκυρα URL του GitHub για να αποφύγουμε σφάλματα.
-    # 3. GROUP BY και COUNT(*): Ομαδοποιεί με βάση το όνομα του οργανισμού και μετράει.
     sql_query = """
         SELECT
-            split_part(url, '/', 4) AS organization_name,
+            organization,
             COUNT(*) AS project_count
         FROM
             repositories
         WHERE
-            url LIKE 'https://github.com/%/%'
+            organization IS NOT NULL AND organization != ''
         GROUP BY
-            organization_name
-        HAVING
-            COUNT(*) > 0
+            organization
         ORDER BY
             project_count DESC;
     """
@@ -669,9 +645,7 @@ def get_organization_project_counts():
         rows = cur.fetchall()
         cur.close()
 
-        # Μετατροπή του αποτελέσματος σε list of dictionaries
         org_counts = [{"organization": row[0], "count": row[1]} for row in rows]
-
         return org_counts
 
     except Exception as e:
@@ -682,29 +656,27 @@ def get_organization_project_counts():
             conn.close()
 
 
+# --- ΔΙΟΡΘΩΣΗ: Χρησιμοποιεί τη στήλη 'organization' αντί για split_part ---
 def get_ku_counts_by_organization():
     """
     Επιστρέφει τα στατιστικά των KUs ομαδοποιημένα ανά οργανισμό.
     """
-    # Το SQL query συνδυάζει τους δύο πίνακες, εξάγει τα δεδομένα,
-    # και τα ομαδοποιεί.
     sql_query = """
         SELECT
-            split_part(r.url, '/', 4) AS organization_name,
+            r.organization,
             ku.key AS ku_id,
             COUNT(*) AS ku_count
         FROM
             analysis_results ar
         JOIN
-            repositories r ON ar.repo_name = r.name
-        ,
+            repositories r ON ar.repo_name = r.name,
             LATERAL jsonb_each_text(ar.detected_kus) AS ku
         WHERE
-            r.url LIKE 'https://github.com/%/%' AND ku.value = '1'
+            r.organization IS NOT NULL AND r.organization != '' AND ku.value = '1'
         GROUP BY
-            organization_name, ku_id
+            r.organization, ku_id
         ORDER BY
-            organization_name, ku_count DESC;
+            r.organization, ku_count DESC;
     """
     try:
         conn = get_db_connection()
@@ -713,26 +685,18 @@ def get_ku_counts_by_organization():
         rows = cur.fetchall()
         cur.close()
 
-        # Επεξεργασία των "επίπεδων" αποτελεσμάτων για να δημιουργηθεί
-        # μια ένθετη (nested) δομή.
         organizations_data = {}
         for row in rows:
             org_name, ku_id, ku_count = row
-
-            # Αν ο οργανισμός δεν υπάρχει στο λεξικό μας, τον προσθέτουμε.
             if org_name not in organizations_data:
                 organizations_data[org_name] = {
                     "organization": org_name,
                     "ku_counts": []
                 }
-
-            # Προσθέτουμε τα στατιστικά του KU στη λίστα του οργανισμού.
             organizations_data[org_name]["ku_counts"].append({
                 "ku_id": ku_id,
                 "count": ku_count
             })
-
-        # Μετατρέπουμε το λεξικό σε λίστα, που είναι η τελική μορφή.
         return list(organizations_data.values())
 
     except Exception as e:
@@ -743,16 +707,14 @@ def get_ku_counts_by_organization():
             conn.close()
 
 
+# --- ΔΙΟΡΘΩΣΗ: Χρησιμοποιεί τη στήλη 'organization' αντί για split_part ---
 def get_monthly_analysis_counts_by_org():
     """
     Επιστρέφει το πλήθος των αναλύσεων ανά μήνα, ομαδοποιημένο ανά οργανισμό.
     """
-    # Το SQL query που κάνει την ομαδοποίηση στη βάση.
-    # DATE_TRUNC('month', ar.timestamp) ομαδοποιεί όλες τις ημερομηνίες
-    # ενός μήνα στην πρώτη μέρα του μήνα, επιτρέποντας το GROUP BY.
     sql_query = """
         SELECT
-            split_part(r.url, '/', 4) AS organization_name,
+            r.organization,
             DATE_TRUNC('month', ar.timestamp)::date AS analysis_month,
             COUNT(ar.id) AS analysis_count
         FROM
@@ -760,11 +722,11 @@ def get_monthly_analysis_counts_by_org():
         JOIN
             repositories r ON ar.repo_name = r.name
         WHERE
-            r.url LIKE 'https://github.com/%/%'
+            r.organization IS NOT NULL AND r.organization != ''
         GROUP BY
-            organization_name, analysis_month
+            r.organization, analysis_month
         ORDER BY
-            organization_name, analysis_month;
+            r.organization, analysis_month;
     """
     try:
         conn = get_db_connection()
@@ -773,25 +735,18 @@ def get_monthly_analysis_counts_by_org():
         rows = cur.fetchall()
         cur.close()
 
-        # Επεξεργασία των αποτελεσμάτων για να δημιουργηθεί η ένθετη δομή
         organizations_data = {}
         for row in rows:
             org_name, month_date, analysis_count = row
-
-            # Αν ο οργανισμός δεν υπάρχει στο λεξικό, τον δημιουργούμε
             if org_name not in organizations_data:
                 organizations_data[org_name] = {
                     "organization": org_name,
                     "monthly_counts": []
                 }
-
-            # Προσθέτουμε τα στατιστικά του μήνα στη λίστα του οργανισμού
             organizations_data[org_name]["monthly_counts"].append({
-                "month": month_date.strftime('%Y-%m'),  # Μορφοποίηση σε 'ΕΕΕΕ-ΜΜ'
+                "month": month_date.strftime('%Y-%m'),
                 "count": analysis_count
             })
-
-        # Μετατροπή του λεξικού σε λίστα για την τελική απάντηση
         return list(organizations_data.values())
 
     except Exception as e:
@@ -800,3 +755,5 @@ def get_monthly_analysis_counts_by_org():
     finally:
         if 'conn' in locals() and conn is not None:
             conn.close()
+
+

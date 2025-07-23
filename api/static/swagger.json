@@ -83,6 +83,11 @@
                     "description": "URL of the repository",
                     "example": "https://github.com/user/my-repo.git"
                   },
+                  "organization": {
+                    "type": "string",
+                    "description": "The organization or owner of the repository",
+                    "example": "apache"
+                  },
                   "description": {
                     "type": "string",
                     "description": "Description of the repository",
@@ -258,6 +263,11 @@
                     "type": "string",
                     "description": "URL of the repository",
                     "example": "https://github.com/user/my-repo.git"
+                  },
+                  "organization": {
+                    "type": "string",
+                    "description": "The organization or owner of the repository",
+                    "example": "apache"
                   },
                   "description": {
                     "type": "string",
@@ -753,7 +763,7 @@
           "Statistics"
         ],
         "summary": "Get project counts by organization",
-        "description": "Returns a list of organization names (e.g., 'apache', 'google') and the number of projects stored in the database for each, based on the repository URL.",
+        "description": "Returns a list of organization names (e.g., 'apache', 'google') and the number of projects stored in the database for each.",
         "responses": {
           "200": {
             "description": "Statistics retrieved successfully.",
@@ -793,39 +803,7 @@
         "description": "Returns a list of organizations, and for each one, a list of the KUs detected in its projects and their respective counts.",
         "responses": {
           "200": {
-            "description": "Statistics retrieved successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "organization": {
-                        "type": "string",
-                        "example": "apache"
-                      },
-                      "ku_counts": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "ku_id": {
-                              "type": "string",
-                              "example": "K1"
-                            },
-                            "count": {
-                              "type": "integer",
-                              "example": 150
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Statistics retrieved successfully."
           },
           "500": {
             "description": "Server error while retrieving data."
@@ -842,39 +820,7 @@
         "description": "Returns a list of organizations, and for each one, the count of analyses performed per month on its projects.",
         "responses": {
           "200": {
-            "description": "Statistics retrieved successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "organization": {
-                        "type": "string",
-                        "example": "apache"
-                      },
-                      "monthly_counts": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "month": {
-                              "type": "string",
-                              "example": "2025-07"
-                            },
-                            "count": {
-                              "type": "integer",
-                              "example": 25
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Statistics retrieved successfully."
           },
           "500": {
             "description": "Server error while retrieving data."

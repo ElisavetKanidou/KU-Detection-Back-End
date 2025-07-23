@@ -177,10 +177,12 @@ def init_routes(app):
         data = request.json
         repo_name = data.get("repo_name")
         url = data.get("url", "")
+        organization = data.get("organization", None)  # Παίρνουμε τον οργανισμό από το request
         description = data.get("description", "")
         comments = data.get("comments", "")
         try:
-            save_repo_to_db(repo_name, url, description, comments)
+            # Περνάμε τον οργανισμό στη συνάρτηση αποθήκευσης
+            save_repo_to_db(repo_name, url, organization, description, comments)
             return jsonify({"message": "Repository created successfully"}), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -196,14 +198,17 @@ def init_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    # --- ΑΛΛΑΓΗ ΕΔΩ ---
     @app.route("/repos/<string:repo_name>", methods=["PUT"])
     def edit_repo(repo_name):
         data = request.json
         url = data.get("url", "")
+        organization = data.get("organization", None)  # Παίρνουμε τον οργανισμό από το request
         description = data.get("description", "")
         comments = data.get("comments", "")
         try:
-            save_repo_to_db(repo_name, url, description, comments)
+            # Περνάμε τον οργανισμό στη συνάρτηση αποθήκευσης
+            save_repo_to_db(repo_name, url, organization, description, comments)
             return jsonify({"message": "Repository updated successfully"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
