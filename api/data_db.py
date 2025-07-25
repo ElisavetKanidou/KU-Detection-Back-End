@@ -618,8 +618,6 @@ def get_ku_counts_from_db():
         if 'conn' in locals() and conn is not None:
             conn.close()
 
-
-# --- ΔΙΟΡΘΩΣΗ: Χρησιμοποιεί τη στήλη 'organization' αντί για split_part ---
 def get_organization_project_counts():
     """
     Ανακτά από τη βάση δεδομένων το πλήθος των projects ανά οργανισμό,
@@ -655,8 +653,6 @@ def get_organization_project_counts():
         if 'conn' in locals() and conn is not None:
             conn.close()
 
-
-# --- ΔΙΟΡΘΩΣΗ: Χρησιμοποιεί τη στήλη 'organization' αντί για split_part ---
 def get_ku_counts_by_organization():
     """
     Επιστρέφει τα στατιστικά των KUs ομαδοποιημένα ανά οργανισμό.
@@ -706,8 +702,6 @@ def get_ku_counts_by_organization():
         if 'conn' in locals() and conn is not None:
             conn.close()
 
-
-# --- ΔΙΟΡΘΩΣΗ: Χρησιμοποιεί τη στήλη 'organization' αντί για split_part ---
 def get_monthly_analysis_counts_by_org():
     """
     Επιστρέφει το πλήθος των αναλύσεων ανά μήνα, ομαδοποιημένο ανά οργανισμό.
