@@ -104,3 +104,4 @@ def line_is_accepted(line, content):
     if line[1:] not in content:
         return False
     return True
+
