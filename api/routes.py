@@ -29,6 +29,8 @@ from api.data_db import (
     get_ku_counts_by_organization,
     get_monthly_analysis_counts_by_org,
     cluster_repositories_by_kus,
+    get_entire_analysis_table,
+    get_analysis_results_by_date_range,
 )
 from core.git_operations import clone_repo, repo_exists, extract_contributions
 from core.git_operations.repo import pull_repo, get_history_repo
@@ -41,7 +43,7 @@ from config.settings import CLONED_REPO_BASE_PATH, CODEBERT_BASE_PATH
 app = Flask(__name__)
 CORS(app)
 
-# --- ΑΛΛΑΓΗ 1: Δημιουργία ενός global ThreadPoolExecutor ---
+# Δημιουργία ενός global ThreadPoolExecutor ---
 # Δημιουργούμε τον executor μία φορά όταν ξεκινάει η εφαρμογή.
 # Αυτός θα διαχειρίζεται όλες τις background εργασίες μας.
 try:
@@ -58,7 +60,7 @@ model = load_codebert_model(CODEBERT_BASE_PATH, 27)
 logging.info("CodeBERT model loaded.")
 
 
-# ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ: Αυτή εκτελείται σε κάθε thread για ένα αρχείο (ΠΑΡΑΜΕΝΕΙ ΙΔΙΑ)
+# ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ: Αυτή εκτελείται σε κάθε thread για ένα αρχείο
 def analyze_single_file(file, repo_url, model):
     """Analyzes a single file and returns the results."""
     try:
@@ -88,9 +90,6 @@ def analyze_single_file(file, repo_url, model):
         return {"error": str(e), "filename": file.filename, "repoUrl": repo_url}
 
 
-# --- ΑΛΛΑΓΗ 2: Η κύρια συνάρτηση ανάλυσης ΤΩΡΑ ΔΕΝ ΕΙΝΑΙ GENERATOR ---
-# Δεν κάνει 'yield' και δεν εξαρτάται από το HTTP request.
-# Απλά τρέχει, κάνει τη δουλειά της και ενημερώνει τη βάση δεδομένων.
 def analyze_repository_task(repo_url, files, model):
     """
     This function runs in a background thread, completely detached from the
@@ -199,7 +198,6 @@ def init_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    # --- ΑΛΛΑΓΗ ΕΔΩ ---
     @app.route("/repos/<string:repo_name>", methods=["PUT"])
     def edit_repo(repo_name):
         data = request.json
@@ -260,7 +258,6 @@ def init_routes(app):
     # Configure logging
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    # --- ΑΛΛΑΓΗ 3: Το endpoint /analyze τώρα ξεκινάει την εργασία και επιστρέφει αμέσως ---
     @app.route("/analyze", methods=["GET"])
     def analyze():
         repo_url = request.args.get("repo_url")
@@ -300,8 +297,6 @@ def init_routes(app):
             logging.exception(f"Failed to start analysis for repository: {repo_name}")
             return jsonify({"error": "An error occurred while trying to start the analysis"}), 500
 
-    # --- ΑΛΛΑΓΗ 4: Αυτό το endpoint γίνεται τώρα ΠΟΛΥ ΣΗΜΑΝΤΙΚΟ ---
-    # Το front-end θα το καλεί για να παίρνει ενημερώσεις.
     @app.route("/analysis_status", methods=["GET"])
     def analysis_status_endpoint():
         repo_name = request.args.get("repo_name")
@@ -338,7 +333,6 @@ def init_routes(app):
             return jsonify({"error": str(e)}), 500
 
 
-    # --- ΝΕΟ ENDPOINT ΓΙΑ ΤΑ ΣΤΑΤΙΣΤΙΚΑ ΤΩΝ KUs ---
     @app.route("/ku_statistics", methods=["GET"])
     def get_ku_statistics():
         """
@@ -444,6 +438,62 @@ def init_routes(app):
         except Exception as e:
             logging.exception("Error in /cluster_repos endpoint")
             return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
+    @app.route("/analysis_results/all", methods=["GET"])
+    def get_all_analysis_table_data():
+        """
+        Επιστρέφει ολόκληρο τον πίνακα analysis_results σε μορφή JSON.
+        """
+        try:
+            # Καλούμε τη νέα συνάρτηση που φτιάξαμε στο data_db.py
+            all_data = get_entire_analysis_table()
+
+            if all_data is not None:
+                # Αν η ανάκτηση ήταν επιτυχής, επιστρέφουμε τα δεδομένα
+                return jsonify(all_data), 200
+            else:
+                # Αν η συνάρτηση επέστρεψε None (λόγω σφάλματος)
+                return jsonify({"error": "Failed to retrieve the analysis results table"}), 500
+
+        except Exception as e:
+            # Γενικό σφάλμα σε περίπτωση απρόβλεπτου προβλήματος
+            logging.exception("Error in /analysis_results/all endpoint")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/analysis_results/by_date_range", methods=["GET"])
+    def get_analysis_by_date_range():
+        """
+        Επιστρέφει τα δεδομένα του πίνακα analysis_results φιλτραρισμένα
+        μεταξύ δύο ημερομηνιών.
+        Query Params: start_date (YYYY-MM), end_date (YYYY-MM)
+        """
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        # Έλεγχος αν δόθηκαν οι παράμετροι
+        if not start_date or not end_date:
+            return jsonify(
+                {"error": "Please provide both 'start_date' and 'end_date' parameters in YYYY-MM format."}), 400
+
+        # Έλεγχος της μορφής των παραμέτρων
+        try:
+            datetime.datetime.strptime(start_date, '%Y-%m')
+            datetime.datetime.strptime(end_date, '%Y-%m')
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Please use YYYY-MM."}), 400
+
+        try:
+            # Κλήση της νέας συνάρτησης από το data_db.py
+            filtered_data = get_analysis_results_by_date_range(start_date, end_date)
+
+            if filtered_data is not None:
+                return jsonify(filtered_data), 200
+            else:
+                return jsonify({"error": "Failed to retrieve filtered analysis results"}), 500
+
+        except Exception as e:
+            logging.exception("Error in /analysis_results/by_date_range endpoint")
+            return jsonify({"error": str(e)}), 500
 
 
 init_routes(app)
