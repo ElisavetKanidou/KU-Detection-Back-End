@@ -32,6 +32,7 @@ from api.data_db import (
     get_analysis_results,
     calculate_risks, get_ku_counts_by_developer,
     get_all_developer_ku_vectors,
+    get_ku_skills_by_organization,
 )
 from core.git_operations import clone_repo, repo_exists, extract_contributions
 from core.git_operations.repo import pull_repo, get_history_repo
@@ -250,23 +251,65 @@ def init_routes(app):
 
     @app.route("/repos", methods=["GET"])
     def list_repos():
+        """
+        Επιστρέφει μια λίστα με τα αποθετήρια (repositories).
+        Μπορεί να φιλτραριστεί με την προαιρετική παράμετρο 'organization'.
+        Παράδειγμα: /repos?organization=apache
+        """
         try:
-            repos = get_all_repos_from_db()
+            # Λαμβάνουμε την προαιρετική παράμετρο 'organization' από το URL query
+            organization = request.args.get('organization')
+
+            # Περνάμε την παράμετρο (που μπορεί να είναι None) στη συνάρτηση της βάσης
+            repos = get_all_repos_from_db(organization=organization)
+
             return jsonify(repos), 200
         except Exception as e:
+            logging.exception("Error in /repos endpoint")
             return jsonify({"error": str(e)}), 500
 
     # Configure logging
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    @app.route("/organizationskills/<string:organization_name>", methods=["GET"])
+    def get_organization_skills(organization_name):
+        """
+        Επιστρέφει μια σύνοψη των "γνωσιακών δεξιοτήτων" για έναν οργανισμό.
+        Για κάθε KU, επιστρέφει το συνολικό πλήθος μοναδικών αρχείων και
+        μοναδικών authors που σχετίζονται με αυτό.
+        """
+        if not organization_name:
+            return jsonify({"error": "Organization name cannot be empty"}), 400
+
+        try:
+            skills_data = get_ku_skills_by_organization(organization_name)
+
+            if skills_data is not None:
+                # Επιστρέφει τα δεδομένα ή μια κενή λίστα αν δεν βρεθεί τίποτα
+                return jsonify(skills_data), 200
+            else:
+                # Σφάλμα κατά την εκτέλεση του query
+                return jsonify({"error": "Failed to retrieve skills for the organization"}), 500
+
+        except Exception as e:
+            logging.exception(f"Error in /organizationskills/{organization_name} endpoint")
+            return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
 
     @app.route("/ku_risk", methods=["GET"])
     def get_ku_risk_endpoint():
         """
         Calculates and returns the risk associated with each Knowledge Unit (KU).
         The risk is a product of the probability of loss and the impact of that loss.
+        Can be filtered by an optional 'organization' query parameter.
+        Example: /ku_risk?organization=apache
         """
         try:
-            risk_data = calculate_risks()
+            # --- ΑΛΛΑΓΗ: Ανάκτηση της προαιρετικής παραμέτρου 'organization' ---
+            organization = request.args.get('organization')
+
+            # --- ΑΛΛΑΓΗ: Πέρασμα της παραμέτρου στη συνάρτηση υπολογισμού ---
+            risk_data = calculate_risks(organization=organization)
+
             if "error" in risk_data:
                 return jsonify(risk_data), 500
 
@@ -286,9 +329,16 @@ def init_routes(app):
         """
         Calculates and returns the risk associated with the hypothetical departure
         of each employee, in both absolute and relative terms.
+        Can be filtered by an optional 'organization' query parameter.
+        Example: /employee_risk?organization=apache
         """
         try:
-            risk_data = calculate_risks()
+            # --- ΑΛΛΑΓΗ: Ανάκτηση της προαιρετικής παραμέτρου 'organization' ---
+            organization = request.args.get('organization')
+
+            # --- ΑΛΛΑΓΗ: Πέρασμα της παραμέτρου στη συνάρτηση υπολογισμού ---
+            risk_data = calculate_risks(organization=organization)
+
             if "error" in risk_data:
                 return jsonify(risk_data), 500
 
@@ -549,10 +599,29 @@ def init_routes(app):
         Επιστρέφει μια συνολική λίστα για όλους τους developers. Κάθε στοιχείο
         της λίστας αντιστοιχεί σε έναν developer μέσα σε ένα repository και
         περιλαμβάνει το KU vector των συνεισφορών του.
+
+        Μπορεί να φιλτραριστεί με προαιρετικές παραμέτρους query:
+        - start_date (YYYY-MM)
+        - end_date (YYYY-MM)
+
+        Αν δεν δοθούν παράμετροι, επιστρέφει όλα τα δεδομένα.
         """
+        # --- ΑΛΛΑΓΗ 1: Ανάκτηση των προαιρετικών παραμέτρων ---
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        # --- ΑΛΛΑΓΗ 2: Βασικός έλεγχος της μορφής των ημερομηνιών ---
         try:
-            # Καλούμε τη νέα συνάρτηση που δεν παίρνει όρισμα
-            all_developer_data = get_all_developer_ku_vectors()
+            if start_date:
+                datetime.datetime.strptime(start_date, '%Y-%m')
+            if end_date:
+                datetime.datetime.strptime(end_date, '%Y-%m')
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Please use YYYY-MM."}), 400
+
+        try:
+            # --- ΑΛΛΑΓΗ 3: Κλήση της συνάρτησης με τις παραμέτρους ---
+            all_developer_data = get_all_developer_ku_vectors(start_date, end_date)
 
             if all_developer_data is not None:
                 return jsonify(all_developer_data), 200
